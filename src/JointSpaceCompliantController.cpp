@@ -139,7 +139,8 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
 
   mJointDMatrix.resize(mNumControlledDofs, mNumControlledDofs);
   mJointDMatrix.setZero();
-
+  
+  // For 6 DOF arm
   if (mNumControlledDofs == 6)
   {
     mJointStiffnessMatrix.diagonal() << 4000, 4000, 4000, 3500, 3500, 3500;
@@ -149,7 +150,8 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
     mJointKMatrix.diagonal() << 10, 10, 10, 10, 10, 10;
     mJointDMatrix.diagonal() << 2, 2, 2, 2, 2, 2;
   }
-  else
+  // For 7 DOF arm
+  else if (mNumControlledDofs == 7)
   {
     mJointStiffnessMatrix.diagonal() << 4000, 4000, 4000, 4000, 3500, 3500, 3500;
     mRotorInertiaMatrix.diagonal() << 0.3, 0.3, 0.3, 0.3, 0.18, 0.18, 0.2;
@@ -157,6 +159,16 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
     mFrictionLp.diagonal() << 5, 5, 5, 5, 4, 4, 4;
     mJointKMatrix.diagonal() << 10, 10, 10, 10, 10, 10, 10;
     mJointDMatrix.diagonal() << 2, 2, 2, 2, 2, 2, 2;
+  }
+  // For 7 DOF arm + gripper 
+  else
+  {
+    mJointStiffnessMatrix.diagonal() << 4000, 4000, 4000, 4000, 3500, 3500, 3500, 1;
+    mRotorInertiaMatrix.diagonal() << 0.3, 0.3, 0.3, 0.3, 0.18, 0.18, 0.2, 1;
+    mFrictionL.diagonal() << 75, 75, 75, 75, 40, 40, 40, 1;
+    mFrictionLp.diagonal() << 5, 5, 5, 5, 4, 4, 4, 1;
+    mJointKMatrix.diagonal() << 10, 10, 10, 10, 10, 10, 10, 1;
+    mJointDMatrix.diagonal() << 2, 2, 2, 2, 2, 2, 2, 1;
   }
 
   // Initialize buffers to avoid dynamic memory allocation at runtime.
@@ -176,6 +188,7 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
 //=============================================================================
 void JointSpaceCompliantController::dynamicReconfigureCallback(gen3_compliant_controllers::JointSpaceCompliantControllerConfig& config, uint32_t level)
 {
+  // For 6 DOF arm
   if (mNumControlledDofs == 6)
   {
     mJointStiffnessMatrix.diagonal() << config.j_0, config.j_1, config.j_2, config.j_3, config.j_4, config.j_5;
@@ -185,7 +198,8 @@ void JointSpaceCompliantController::dynamicReconfigureCallback(gen3_compliant_co
     mJointKMatrix.diagonal() << config.k_0, config.k_1, config.k_2, config.k_3, config.k_4, config.k_5;
     mJointDMatrix.diagonal() << config.d_0, config.d_1, config.d_2, config.d_3, config.d_4, config.d_5;
   }
-  else
+  // For 7 DOF arm
+  else if (mNumControlledDofs == 7)
   {
     mJointStiffnessMatrix.diagonal() << config.j_0, config.j_1, config.j_2, config.j_3, config.j_4, config.j_5, config.j_6;
     mRotorInertiaMatrix.diagonal() << config.b_0, config.b_1, config.b_2, config.b_3, config.b_4, config.b_5, config.b_6;
@@ -193,6 +207,16 @@ void JointSpaceCompliantController::dynamicReconfigureCallback(gen3_compliant_co
     mFrictionLp.diagonal() << config.lp_0, config.lp_1, config.lp_2, config.lp_3, config.lp_4, config.lp_5, config.lp_6;
     mJointKMatrix.diagonal() << config.k_0, config.k_1, config.k_2, config.k_3, config.k_4, config.k_5, config.k_6;
     mJointDMatrix.diagonal() << config.d_0, config.d_1, config.d_2, config.d_3, config.d_4, config.d_5, config.d_6;
+  }
+  // For 7 DOF arm + gripper 
+  else
+  {
+    mJointStiffnessMatrix.diagonal() << config.j_0, config.j_1, config.j_2, config.j_3, config.j_4, config.j_5, config.j_6, 1;
+    mRotorInertiaMatrix.diagonal() << config.b_0, config.b_1, config.b_2, config.b_3, config.b_4, config.b_5, config.b_6, 1;
+    mFrictionL.diagonal() << config.l_0, config.l_1, config.l_2, config.l_3, config.l_4, config.l_5, config.l_6, 1;
+    mFrictionLp.diagonal() << config.lp_0, config.lp_1, config.lp_2, config.lp_3, config.lp_4, config.lp_5, config.lp_6, 1;
+    mJointKMatrix.diagonal() << config.k_0, config.k_1, config.k_2, config.k_3, config.k_4, config.k_5, config.k_6, 1;
+    mJointDMatrix.diagonal() << config.d_0, config.d_1, config.d_2, config.d_3, config.d_4, config.d_5, config.d_6, 1;
   }
 }
 
@@ -305,6 +329,13 @@ void JointSpaceCompliantController::update(const ros::Time& time, const ros::Dur
   mNominalFriction = mRotorInertiaMatrix * mFrictionL * ((mNominalThetaDotPrev - mCurrentVelocity) + mFrictionLp * (mNominalThetaPrev - mCurrentTheta));
 
   mCommandEffort = mTaskEffort + mNominalFriction;
+
+  if (mNumControlledDofs == 8)
+  {
+    // Override the last element of mCommandEffort with the gripper command (position)
+    mCommandEffort[mNumControlledDofs - 1] = mDesiredPosition[mNumControlledDofs - 1];
+  }
+  
 
   if (mCount < 50)
   {

@@ -5,13 +5,15 @@
   <arg name="password" default="admin" doc="Password for kortex session"/>
   <arg name="api_session_inactivity_timeout_ms" default="35000"/> <!--milliseconds-->
   <arg name="api_connection_inactivity_timeout_ms" default="20000"/> <!--milliseconds-->
-  <arg name="dof" default="6"/>
+  <arg name="arm_dof" default="7"/>
   <arg name="use_admittance" default="false"/> <!--set to true to use admittance mode provided by kinova-->
   <arg name="current_control" default="true"/>
   <arg name="use_gripper" default="true"/>
   <arg name="urdf_file" default=""/>
   <arg name="end_effector" default="end_effector_link"/>
   <arg name="controller_type" default="joint"/>
+  <arg name="total_dof" default="$(eval arm_dof + 1)" if="$(arg use_gripper)" />
+  <arg name="total_dof" default="$(arg arm_dof)" unless="$(arg use_gripper)" />
   <param name="end_effector" type="string" value="$(arg end_effector)"/>
  
   <!-- Gen3 Hardware Node -->
@@ -22,7 +24,7 @@
   	<param name="password" value="$(arg password)"/>
   	<param name="api_session_inactivity_timeout_ms" value="$(arg api_session_inactivity_timeout_ms)"/>
   	<param name="api_connection_inactivity_timeout_ms" value="$(arg api_connection_inactivity_timeout_ms)"/>
-  	<param name="dof" value="$(arg dof)"/>
+  	<param name="dof" value="$(arg arm_dof)"/>
   	<param name="use_admittance" value="$(arg use_admittance)"/>
   	<param name="current_control" value="$(arg current_control)"/>
   	<param name="use_gripper" value="$(arg use_gripper)"/>
@@ -53,14 +55,9 @@
   </group>
 
   <!-- load controller configuration -->
-  <rosparam file="$(find gen3_compliant_controllers)/config/gen3_$(arg dof)dof_compliant_controllers.yaml" command="load" />
+  <rosparam file="$(find gen3_compliant_controllers)/config/gen3_$(arg total_dof)dof_compliant_controllers.yaml" command="load" />
   
-  <group if="$(eval dof == 6)">
-    <param name="robot_description" command="cat $(find kortex_description)/robots/gen3_$(arg dof)dof_vision_forque.urdf" />
-  </group>
-  <group if="$(eval dof == 7)">
-    <param name="robot_description" command="cat $(find kortex_description)/robots/gen3_$(arg dof)dof_vision.urdf" />
-  </group>
+  <param name="robot_description" command="cat $(find kortex_description)/robots/gen3_$(arg total_dof)dof_vision.urdf" />
 
   <node pkg="robot_state_publisher" type="robot_state_publisher" name="rob_st_pub" />
 
