@@ -139,6 +139,9 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
 
   mJointDMatrix.resize(mNumControlledDofs, mNumControlledDofs);
   mJointDMatrix.setZero();
+
+  maxVelocity.resize(mNumControlledDofs, mNumControlledDofs);
+  maxVelocity.setZero();
   
   // For 6 DOF arm
   if (mNumControlledDofs == 6)
@@ -149,6 +152,7 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
     mFrictionLp.diagonal() << 5, 5, 5, 4, 4, 4;
     mJointKMatrix.diagonal() << 10, 10, 10, 10, 10, 10;
     mJointDMatrix.diagonal() << 2, 2, 2, 2, 2, 2;
+    maxVelocity.diagonal() << 0.25, 0.25, 0.25, 0.25, 0.25, 0.25; // Set maximum velocity for each joint
   }
   // For 7 DOF arm
   else if (mNumControlledDofs == 7)
@@ -159,6 +163,7 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
     mFrictionLp.diagonal() << 5, 5, 5, 5, 4, 4, 4;
     mJointKMatrix.diagonal() << 10, 10, 10, 10, 10, 10, 10;
     mJointDMatrix.diagonal() << 2, 2, 2, 2, 2, 2, 2;
+    maxVelocity.diagonal() << 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25; // Set maximum velocity for each joint
   }
   // For 7 DOF arm + gripper 
   else
@@ -169,6 +174,7 @@ bool JointSpaceCompliantController::init(hardware_interface::RobotHW* robot, ros
     mFrictionLp.diagonal() << 5, 5, 5, 5, 4, 4, 4, 1;
     mJointKMatrix.diagonal() << 10, 10, 10, 10, 10, 10, 10, 1;
     mJointDMatrix.diagonal() << 2, 2, 2, 2, 2, 2, 2, 1;
+    maxVelocity.diagonal() << 0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 1; // Set maximum velocity for each joint
   }
 
   // Initialize buffers to avoid dynamic memory allocation at runtime.
@@ -197,6 +203,7 @@ void JointSpaceCompliantController::dynamicReconfigureCallback(gen3_compliant_co
     mFrictionLp.diagonal() << config.lp_0, config.lp_1, config.lp_2, config.lp_3, config.lp_4, config.lp_5;
     mJointKMatrix.diagonal() << config.k_0, config.k_1, config.k_2, config.k_3, config.k_4, config.k_5;
     mJointDMatrix.diagonal() << config.d_0, config.d_1, config.d_2, config.d_3, config.d_4, config.d_5;
+    //maxVelocity.diagonal() << config.max_v_0, config.max_v_1, config.max_v_2, config.max_v_3, config.max_v_4, config.max_v_5;
   }
   // For 7 DOF arm
   else if (mNumControlledDofs == 7)
@@ -207,6 +214,7 @@ void JointSpaceCompliantController::dynamicReconfigureCallback(gen3_compliant_co
     mFrictionLp.diagonal() << config.lp_0, config.lp_1, config.lp_2, config.lp_3, config.lp_4, config.lp_5, config.lp_6;
     mJointKMatrix.diagonal() << config.k_0, config.k_1, config.k_2, config.k_3, config.k_4, config.k_5, config.k_6;
     mJointDMatrix.diagonal() << config.d_0, config.d_1, config.d_2, config.d_3, config.d_4, config.d_5, config.d_6;
+    //maxVelocity.diagonal() << config.max_v_0, config.max_v_1, config.max_v_2, config.max_v_3, config.max_v_4, config.max_v_5, config.max_v_6;
   }
   // For 7 DOF arm + gripper 
   else
@@ -217,6 +225,7 @@ void JointSpaceCompliantController::dynamicReconfigureCallback(gen3_compliant_co
     mFrictionLp.diagonal() << config.lp_0, config.lp_1, config.lp_2, config.lp_3, config.lp_4, config.lp_5, config.lp_6, 1;
     mJointKMatrix.diagonal() << config.k_0, config.k_1, config.k_2, config.k_3, config.k_4, config.k_5, config.k_6, 1;
     mJointDMatrix.diagonal() << config.d_0, config.d_1, config.d_2, config.d_3, config.d_4, config.d_5, config.d_6, 1;
+    //maxVelocity.diagonal() << config.max_v_0, config.max_v_1, config.max_v_2, config.max_v_3, config.max_v_4, config.max_v_5, config.max_v_6, 1;
   }
 }
 
@@ -321,6 +330,8 @@ void JointSpaceCompliantController::update(const ros::Time& time, const ros::Dur
 
   mNominalThetaDDot = mRotorInertiaMatrix.inverse() * (mTaskEffort + mGravity + mCurrentEffort); // mCurrentEffort is negative of what is required here
   mNominalThetaDot = mNominalThetaDotPrev + mNominalThetaDDot * step_time;
+  // Clamp max mNominalThetaDot to prevent excessive velocities
+  mNominalThetaDot = mNominalThetaDot.cwiseMin(maxVelocity.diagonal()).cwiseMax(-maxVelocity.diagonal());
   mNominalTheta = mNominalThetaPrev + mNominalThetaDot * step_time;
 
   mNominalThetaPrev = mNominalTheta;

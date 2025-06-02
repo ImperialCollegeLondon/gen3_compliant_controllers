@@ -78,6 +78,7 @@ private:
   Eigen::MatrixXd mFrictionLp;           // Friction observer matrix 2
   Eigen::MatrixXd mJointKMatrix;         // Joint compliance proportional gain matrix
   Eigen::MatrixXd mJointDMatrix;         // Joint compliance derivative gain matrix
+  Eigen::MatrixXd maxVelocity;           // Maximum joint velocity at each time
 
   long long int mCount; // Used during initialization
 
